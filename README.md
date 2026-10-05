@@ -7,6 +7,7 @@
 - src/production_flow/：生产节点、输送通道、原油批次、外输申请、分配和情景分析；
 - src/reservoir_assurance/：油藏项目、证据版本、评估协议、观测导入、分析任务与准入决定；
 - src/equipment_quality/：装备批次、传感观测、质量分析、账号权限和审批；
+- src/subsea_intervention/：水下井干预闭环，作业版本冻结、顺序签署、资源承诺、遥测归集与恢复跟踪；
 - fixtures/：离线验收使用的评估协议与结构化观测；
 - tests/：领域规则、错误边界、事务、权限、HTTP API 和命令行验收测试。
 
@@ -29,13 +30,26 @@
     PYTHONPATH=src python3 -m production_flow.acceptance --workspace .
     PYTHONPATH=src python3 -m reservoir_assurance.acceptance --workspace .
     PYTHONPATH=src python3 -m equipment_quality.acceptance
+    PYTHONPATH=src python3 -m subsea_intervention.acceptance --workspace .
 
-三条命令会在临时 SQLite 数据库中完成生产生产流转、油藏证据评估和装备质量流程，不访问外部网络。
+四条命令会在临时 SQLite 数据库中完成生产生产流转、油藏证据评估、装备质量流程和水下井干预闭环，不访问外部网络。
 
 ## HTTP 服务
 
     PYTHONPATH=src python3 -m production_flow.api --database production-flow.sqlite3 --host 127.0.0.1 --port 8080
     PYTHONPATH=src python3 -m reservoir_assurance.api --database reservoir-assurance.sqlite3 --host 127.0.0.1 --port 8081
     PYTHONPATH=src python3 -m equipment_quality.api --database equipment-quality.sqlite3 --host 127.0.0.1 --port 8082
+    PYTHONPATH=src python3 -m subsea_intervention.api --database subsea-intervention.sqlite3 --host 127.0.0.1 --port 8083
 
 服务提供 JSON 接口与健康检查。进程重启后可以继续读取 SQLite 中的业务状态和审计历史。
+
+## 水下干预闭环
+
+水下干预模块把一次压力异常处置冻结为不可篡改的作业版本：井口设备快照、故障证据摘要、风险屏障、作业步骤、人员资格、工具组件、海况窗口和应急恢复方案在冻结时一并落定，后续里程碑全部锚定该版本的内容摘要。
+
+- 隔离、开工、暂停、恢复、完工按状态机顺序推进，每个里程碑由指定职责签署，相邻里程碑不得由同一人确认；
+- 隔离确认必须逐屏障提交证据引用与摘要，缺失或未知屏障会被拒绝；
+- 开工与恢复必须落在冻结的海况窗口内；
+- 遥测回调按幂等键去重，观测时间早于已签署事实或已应用遥测的记录只归档、不覆盖；
+- ROV、备件、潜水支持等资源同一时刻只能承诺给一个作业，完工或取消时自动释放；
+- 取消作业会按冻结的应急恢复方案生成恢复动作，管理人员可通过作业报告还原每个屏障的证据、当前责任方和未完成恢复动作。
